@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/ratuhin1122/Background-Jobs#readme",
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "inngest": "^4.18.1"
   }
 }
