@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const { Inngest } = require("inngest");
 const { serve } = require("inngest/express");
 
@@ -9,14 +10,18 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// In-memory data store for reports
+const reports = new Map();
+
 // Stage 0: Health check endpoint
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-// Stage 1: Inngest Client & say-hello Function
+// Stage 1 & 2: Inngest Client
 const inngest = new Inngest({ id: "report-api", isDev: true });
 
+// Function 1: say-hello
 const sayHello = inngest.createFunction(
   { id: "say-hello", triggers: [{ event: "test/hello" }] },
   async ({ event, step }) => {
@@ -25,12 +30,76 @@ const sayHello = inngest.createFunction(
   }
 );
 
+// Function 2: make-report
+const makeReport = inngest.createFunction(
+  { id: "make-report", triggers: [{ event: "report/requested" }] },
+  async ({ event, step }) => {
+    const { id, topic } = event.data;
+
+    // Step 1: Simulate slow task (e.g. AI generation, data export)
+    await step.sleep("do-the-slow-work", "8s");
+
+    // Step 2: Build report result and update in-memory store
+    const result = await step.run("build-report", async () => {
+      const completedReport = {
+        id,
+        topic,
+        status: "done",
+        result: `Comprehensive report on '${topic}'. Generated successfully.`,
+        completedAt: new Date().toISOString(),
+      };
+      reports.set(id, completedReport);
+      return completedReport;
+    });
+
+    return result;
+  }
+);
+
+// Stage 2: POST /reports endpoint (Accept fast, work in background)
+app.post("/reports", async (req, res) => {
+  const { topic } = req.body;
+  const id = crypto.randomUUID();
+
+  const initialReport = {
+    id,
+    topic,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+  reports.set(id, initialReport);
+
+  // Send event to Inngest to trigger background processing
+  await inngest.send({
+    name: "report/requested",
+    data: { id, topic },
+  });
+
+  // Return immediately with 202 Accepted
+  res.status(202).json({
+    id,
+    status: "pending",
+  });
+});
+
+// Stage 2: GET /reports/:id endpoint (Status polling)
+app.get("/reports/:id", (req, res) => {
+  const { id } = req.params;
+  const report = reports.get(id);
+
+  if (!report) {
+    return res.status(404).json({ error: "Report not found" });
+  }
+
+  res.status(200).json(report);
+});
+
 // Serve Inngest functions at /api/inngest
 app.use(
   "/api/inngest",
   serve({
     client: inngest,
-    functions: [sayHello],
+    functions: [sayHello, makeReport],
   })
 );
 
