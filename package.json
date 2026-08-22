@@ -1,23 +1,23 @@
 {
-  "name": "week-7-(3)",
+  "name": "background-jobs-api",
   "version": "1.0.0",
-  "description": "",
+  "description": "Background jobs API with Inngest, Express, durable workflows, retries, and cron scheduling",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "inngest": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ratuhin1122/Background-Jobs.git"
-  },
-  "keywords": [],
+  "keywords": [
+    "inngest",
+    "background-jobs",
+    "cron",
+    "express",
+    "nodejs",
+    "durable-execution"
+  ],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/ratuhin1122/Background-Jobs/issues"
-  },
-  "homepage": "https://github.com/ratuhin1122/Background-Jobs#readme",
   "dependencies": {
     "express": "^5.2.1",
     "inngest": "^4.18.1"
