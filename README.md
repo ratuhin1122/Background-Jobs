@@ -129,3 +129,45 @@ Opening `http://localhost:8288` gives full visual observability into all backgro
 - **`make-report` (Success)**: Shows step-by-step progress through `do-the-slow-work` (8s sleep) and `build-report` step.
 - **`make-report` (Failed / Topic "fail")**: Displays Attempt 1 failure → Backoff wait → Attempt 2 failure → Backoff wait → Attempt 3 failure → Final `Failed` status with `"The report oven is broken!"`.
 - **`heartbeat`**: Displays recurrent runs scheduled every 1 minute logging current report states.
+
+---
+
+## 7. Bonus Stage 6: AI vs Me
+
+In this stage, a junior AI assistant was prompted from memory to build the exact same system in quarantine under the `ai-version/` directory.
+
+### The Full Prompt Given to the AI
+```text
+Build a Node.js Express background job API with Inngest.
+Requirements:
+1. Express app with health endpoint GET /health -> { status: "ok" }.
+2. Inngest client (report-api) served at /api/inngest.
+3. Event 'test/hello' triggering 'say-hello' which sleeps 5s and returns a greeting.
+4. In-memory store for reports. POST /reports accepts { topic }, validates topic (400 on error), generates UUID, stores { id, topic, status: "pending" }, sends 'report/requested' event to Inngest, and immediately returns 202 Accepted with { id, status: "pending" }.
+5. Inngest function 'make-report' with 2 retries: sleeps 8s ('do-the-slow-work'), then runs 'build-report' step. If topic is 'fail', throw an error 'The report oven is broken!'. Otherwise updates report in store to status 'done' and saves result.
+6. Status endpoint GET /reports/:id returning current report or 404.
+7. Scheduled cron function 'heartbeat' running '* * * * *' logging count of pending, done, and failed reports.
+```
+
+### Comparison & Diff Analysis
+
+| Aspect | Hand-Built (`index.js`) | AI-Generated (`ai-version/index.js`) |
+|---|---|---|
+| **Data Store** | Uses JavaScript `Map` (`new Map()`) for O(1) key lookups and `.values()` iteration. | Uses plain JavaScript object dictionary (`reportsStore = {}`). |
+| **Data Consistency** | Explicitly retains `createdAt` and `completedAt` timestamps on the report records. | Generated report object replaces keys and omits detailed metadata formatting. |
+| **Response Headers & Strict Typing** | Checks `typeof topic !== "string"` and `topic.trim() === ""` with descriptive error messages. | Uses a simpler `!topic` falsy check. |
+
+### The Three Questions
+
+1. **What did the AI do better — and do you understand it?**
+   - The AI concisely used object destructuring and compact helper filtering (`Object.values(reportsStore).filter(...)`), which was quick to read. We understand how plain object property lookups work, though Maps are preferred for dynamic key addition/deletion in modern Node.js.
+
+2. **What did it get wrong or silently ignore?**
+   - The AI initially used a separate port (`3001`) and different function IDs (`ai-say-hello`, `ai-make-report`) rather than adhering to the exact service ID `report-api` and matching step names (`do-the-slow-work`, `build-report`), which would cause event routing drift if switched into the same Inngest dev server without re-registration.
+
+3. **What did your prompt forget to specify — and what did the AI silently decide for you?**
+   - The prompt forgot to specify exact data types for timestamps and step return values. The AI silently decided to wrap return messages in object payloads `{ message: ... }` rather than direct strings, and used a plain JS object rather than a `Map`.
+
+### Rematch Improvement
+- **Updated Prompt Refinement**: Explicitly defined the data structures (`new Map()`), ISO-8601 timestamps (`createdAt`, `completedAt`), exact function and step identifiers, and environment configuration (`INNGEST_DEV=1`).
+- **Rematch Result**: The regenerated code achieved 100% parity with the architectural standards established in Stages 0–5.
