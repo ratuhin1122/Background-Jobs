@@ -30,9 +30,13 @@ const sayHello = inngest.createFunction(
   }
 );
 
-// Function 2: make-report
+// Function 2: make-report (Stage 3: retries configured to 2)
 const makeReport = inngest.createFunction(
-  { id: "make-report", triggers: [{ event: "report/requested" }] },
+  {
+    id: "make-report",
+    triggers: [{ event: "report/requested" }],
+    retries: 2,
+  },
   async ({ event, step }) => {
     const { id, topic } = event.data;
 
@@ -41,6 +45,11 @@ const makeReport = inngest.createFunction(
 
     // Step 2: Build report result and update in-memory store
     const result = await step.run("build-report", async () => {
+      // Stage 3: Intentionally throw an error if topic is "fail" to demonstrate retries
+      if (topic === "fail") {
+        throw new Error("The report oven is broken!");
+      }
+
       const completedReport = {
         id,
         topic,
@@ -56,9 +65,15 @@ const makeReport = inngest.createFunction(
   }
 );
 
-// Stage 2: POST /reports endpoint (Accept fast, work in background)
+// Stage 2 & 3: POST /reports endpoint with input validation
 app.post("/reports", async (req, res) => {
-  const { topic } = req.body;
+  const { topic } = req.body || {};
+
+  // Stage 3: Input validation - reject missing/empty topic at the door with 400 Bad Request
+  if (!topic || typeof topic !== "string" || topic.trim() === "") {
+    return res.status(400).json({ error: "Missing or invalid 'topic' in request body" });
+  }
+
   const id = crypto.randomUUID();
 
   const initialReport = {
