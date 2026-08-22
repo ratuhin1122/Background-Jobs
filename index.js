@@ -21,7 +21,7 @@ app.get("/health", (req, res) => {
 // Stage 1 & 2: Inngest Client
 const inngest = new Inngest({ id: "report-api", isDev: true });
 
-// Function 1: say-hello
+// Function 1: say-hello (Event-triggered)
 const sayHello = inngest.createFunction(
   { id: "say-hello", triggers: [{ event: "test/hello" }] },
   async ({ event, step }) => {
@@ -30,7 +30,7 @@ const sayHello = inngest.createFunction(
   }
 );
 
-// Function 2: make-report (Stage 3: retries configured to 2)
+// Function 2: make-report (Event-triggered with sleep, run, and retries)
 const makeReport = inngest.createFunction(
   {
     id: "make-report",
@@ -45,7 +45,7 @@ const makeReport = inngest.createFunction(
 
     // Step 2: Build report result and update in-memory store
     const result = await step.run("build-report", async () => {
-      // Stage 3: Intentionally throw an error if topic is "fail" to demonstrate retries
+      // Stage 3: Throw error if topic is "fail" to demonstrate retry & backoff
       if (topic === "fail") {
         throw new Error("The report oven is broken!");
       }
@@ -62,6 +62,31 @@ const makeReport = inngest.createFunction(
     });
 
     return result;
+  }
+);
+
+// Function 3: heartbeat (Stage 4: Cron-triggered scheduled job every minute)
+const heartbeat = inngest.createFunction(
+  {
+    id: "heartbeat",
+    triggers: [{ cron: "* * * * *" }],
+  },
+  async ({ step }) => {
+    return await step.run("log-summary", async () => {
+      let pending = 0;
+      let done = 0;
+      let failed = 0;
+
+      for (const report of reports.values()) {
+        if (report.status === "pending") pending++;
+        else if (report.status === "done") done++;
+        else if (report.status === "failed") failed++;
+      }
+
+      const summary = `[Heartbeat Cron] Report Status Summary -> Pending: ${pending}, Done: ${done}, Failed: ${failed} (Total: ${reports.size})`;
+      console.log(summary);
+      return { pending, done, failed, total: reports.size, summary };
+    });
   }
 );
 
@@ -114,7 +139,7 @@ app.use(
   "/api/inngest",
   serve({
     client: inngest,
-    functions: [sayHello, makeReport],
+    functions: [sayHello, makeReport, heartbeat],
   })
 );
 
